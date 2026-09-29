@@ -1,0 +1,11 @@
+# Fragmentos de ruta donde NINGUN script de .opencode/skills puede escribir.
+# Uno por linea, se compara como segmento completo de carpeta y sin distinguir mayusculas.
+# Si este archivo falta, los scripts de escritura se niegan a escribir.
+#
+# Los repos (sate_standa, tms, ws_rndc...) ya NO van aqui: el codigo se trabaja en la
+# rama del id. Su proteccion la da apply_blocks: solo escribe los Archivos objetivo del
+# ID_SPEC (FUERA_DE_ALCANCE), nunca en master/main (RAMA_BASE) y deja el respaldo en
+# _agentes/respaldos, fuera del repo.
+.git
+_respaldos
+node_modules

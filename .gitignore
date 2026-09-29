@@ -1,0 +1,32 @@
+# Dependencias que OpenCode instala solo al arrancar (se regeneran en cada equipo)
+node_modules/
+package.json
+package-lock.json
+bun.lock
+
+# Cache de Python de los scripts de skills/
+__pycache__/
+*.pyc
+
+# Bitacora diaria de cada desarrollador (bitacora.py crea la carpeta si falta)
+logs/
+
+# Temporales de los agentes (opencode.json les permite escribir en .opencode/tmp)
+tmp/
+
+# Material propio de un id o de un equipo: no lo carga ningun agente ni script
+conocimiento/
+_retirados/
+agents/json/
+EVALUACION_AGENTES_*.md
+
+# Respaldos y restos de edicion
+*.bak
+*.PRE_*
+*.orig
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
