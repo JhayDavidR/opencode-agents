@@ -117,6 +117,7 @@ escribes la tuya). Toda respuesta queda escrita en un archivo: el chat no es evi
 | `/comparar <a> <b>` | comparator_agent | depurar un fallo o comparar versiones/modulos |
 | `/documentar <id> [que se probo]` | documenter | tras la prueba funcional |
 | `/commit <id> [feat\|fix] [notas]` | commits | mensaje del commit y del pull request de Bitbucket; git lo ejecutas tu |
+| `/resumen <id> [notas]` | resumen | al final del id: tabla en el chat de lo que se modifico en cada archivo (Existente/Nuevo) y las sentencias SQL del spec, para llenar el guion de montaje. No escribe archivos |
 | `/reporte [horas] [notas]` | time_report | cierre del dia |
 
 Recorridos tipicos:
@@ -238,6 +239,7 @@ ajustar con la evidencia de cada piloto.
 | time_report | reporte del dia | zai-coding-plan/glm-5-turbo | zai-coding-plan/glm-4.7 | bajo |
 | guia | relevo del router | zai-coding-plan/glm-5-turbo (fijo en el agente) | - | bajo |
 | commits | mensaje de commit y pull request | zai-coding-plan/glm-5-turbo (fijo en el agente) | - | bajo |
+| resumen | resumen final por archivo | zai-coding-plan/glm-5-turbo (fijo en el agente) | - | bajo |
 
 Evitar modelos flash/turbo en el analisis completo (`/spec`), en la primera implementacion de
 un archivo y en el documenter: producen lo que llega a produccion o razonan escenarios de
@@ -276,7 +278,6 @@ Anota en `/reporte` (notas) que modelo usaste en cada paso mientras se estandari
 | respaldos/<archivo>.PRE_<fecha>.bak | apply_blocks.py (estado original antes de cada lote; fuera del repo) | tu, documenter |
 | COMMIT_<repo>.txt, PR_<repo>.txt | commits (`/commit`) | tu (commit, Bitbucket) |
 | COMMITS.jsonl | commit_msg.py --registrar (desde cuando toma cambios el siguiente /commit) | commit_msg.py, router |
-
 REGISTRO.jsonl es lo que le dice al router que un archivo ya se aplico y lo que llena la
 ficha de trazabilidad del manual: aplica SIEMPRE con `--registro --lint` (los agentes ya lo
 hacen). Cada fila guarda tambien los items del lote, la copia del lote, el resultado del
