@@ -23,6 +23,7 @@ permission:
   skill:
     "*": deny
     "avansat-ui": allow
+    "financiero-consultor": allow
     "ruta-desarrollo": allow
     "preguntas-desarrollador": allow
     "formato-requerimiento": allow
@@ -129,6 +130,24 @@ questions" and "Method" below do NOT apply: follow only these steps.
      one): amend that case line and the `casos:` line of every item it
      touches. A change that contradicts a case the developer already decided
      goes in the confirmation question, with the case quoted.
+   - The criterion goes to the item of the file WHERE THE LOGIC LIVES, not
+     where the developer saw the symptom: a wrong total on screen that the
+     class computes is a criterion of the class item; a filter that does not
+     match because the AJAX case does not decode it is a criterion of the
+     AJAX item. Use the items' `objetivo`/`ubicacion` lines to decide; if the
+     index does not tell you, ask in the confirmation question. When the
+     developer names an item number, still check this: if the logic lives in
+     another item, propose both (the developer's and the one that owns the
+     logic).
+   - The developer changes a decision already in `Decisiones del
+     desarrollador` (e.g. "the duplicates are now posted once"): every item
+     whose criteria or cases depend on the old decision gets a criterion
+     (search the old decision's words in the items), and the decision line
+     says `reemplaza a "<texto de la decision anterior>"`. The old line stays:
+     it is history.
+   - Criteria added here are written `REVISION <AAAA-MM-DD>: <observable
+     behaviour>` (same format `/revisar` uses), so the developer and the
+     implementer see which ones are corrections of code already written.
 3. Confirm with ONE question (skill `preguntas-desarrollador`): "este cambio
    afecta los items N (archivo) y M (archivo): <resumen de lo que agregas>".
    Options: confirm (recommended) / other items / cancel. Anything the change
@@ -136,7 +155,8 @@ questions" and "Method" below do NOT apply: follow only these steps.
 4. On confirmation, write `_agentes/ID_SPEC.md` in place (first copy it verbatim
    to `_agentes/ID_SPEC_anterior_<AAAA-MM-DD_HHMM>.md`):
    - the amended or new items;
-   - one line in `Decisiones del desarrollador` with the change and the answer;
+   - one line in `Decisiones del desarrollador` with the change and the answer
+     (with `reemplaza a "..."` when it overrides an earlier decision);
    - the next R number: append it to `<ID_DIR>/REQUERIMIENTO_<carpeta>_cambio.md`
      (create it in the `formato-requerimiento` shape if missing, `fuente:
      prompt del desarrollador AAAA-MM-DD`, literal text) and add its line to
@@ -266,7 +286,10 @@ questions.
 5. When an item creates or changes a screen control (field, filter, select,
    calendar, button, chart), load the `avansat-ui` skill and name in the item
    the house component to use (Form method, Chosen, datepicker, Chart.js) and
-   a sibling screen that already uses it.
+   a sibling screen that already uses it. If a target file lives in the
+   `consultor` repo (Avansat Financiero), load `financiero-consultor` instead:
+   screens there use DinamicHtml, other database prefixes (`CONS.`, `OTRA.`),
+   other menu and authorization tables.
 5b. **Matriz de casos** (PROMPT_ANALISIS rules 10-12) - the step that
    prevents the costliest errors of this flow, because the implementer
    verifies each file against it instead of copying another item's diff.
@@ -300,6 +323,23 @@ questions.
    totals of THAT file that must change, with the lines you read. Every item
    that creates code has its `reutiliza:` line from step 3b, with file:line
    of what it reuses in THAT file.
+6b. **Test data for `/revisar`.** When an item holds logic that runs without a
+   browser (reading an uploaded file, cross-checking, totals, an accounting
+   voucher), its criteria name the test input and the expected result, and
+   `<ID_DIR>/pruebas/` holds them: the input files (one clean, one with the
+   matrix cases, one per rejection rule) and `ESPERADO.md` with one row per
+   file and the exact counts and totals. `/revisar` executes the code against
+   them; without them it can only read. If the inputs need data only the
+   developer has (real documents, accounts, the client's manifests), ask for
+   the query in the same question call and leave the item's criterion as
+   `con pruebas/<archivo> el resultado es el de pruebas/ESPERADO.md`.
+6c. **Contracts between the id's own files.** Items are ordered provider ->
+   consumer (class, AJAX, screen, JS). In the consumer items name the exact
+   contract: the AJAX `Action` values, the request field and filter names, the
+   upload field name, the combo values (the ones the provider stores, not the
+   ones the document shows), the response shape. When the provider is
+   implemented first, `/revisar` checks these names against its real code and
+   corrects the consumer items before they run.
 7. **Archivos objetivo**: ALWAYS logical names, NEVER a drive path of this
    machine (the id is also worked on other machines):
    - a file of a registered repo -> `{repo:<nombre>}\<ruta dentro del repo>`,

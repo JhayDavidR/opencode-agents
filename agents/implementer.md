@@ -21,6 +21,7 @@ permission:
     "*": deny
     "code-doc-standard": allow
     "avansat-ui": allow
+    "financiero-consultor": allow
     "preguntas-desarrollador": allow
   edit:
     "*": deny
@@ -143,6 +144,23 @@ whole ID_SPEC, ACTA or JSON files (open one only for an entry `contexto`
 points to and you need). In LOCATE pass only the symbols of items N. Never
 verify, re-certify or touch other items of the file: the router already knows
 they did not change.
+
+In a delta, the criteria that changed are usually the `REVISION <fecha>:`
+lines (written by `/revisar` or `/cambio` over code that already exists): the
+block corrects exactly what each of them states, and nothing else - no
+renaming, no reformatting, no "while I am here" fix of a nearby line, no
+change to a criterion that did not change. If a REVISION criterion cannot be
+met without touching code another item owns, say so in the ACTA (`RIESGO`) and
+stop on that item instead of stretching the block. The next `/revisar` checks
+that the diff has no hunk outside those criteria.
+
+**Consumer files of this id (screen, JS, AJAX that call code the id already
+wrote).** Before writing, read the provider's real contract in its current
+file (`read_file.py --find` on the `case '`, the method or the field): AJAX
+`Action` values, request and filter names, upload field name, the values the
+provider stores (combos must offer those), the response shape and how a
+non-JSON answer arrives. When the item text and the provider's code disagree,
+the code wins only for names; for behaviour, stop and ask.
 
 1. `id_workspace.py estado <carpeta>`. It lists what `_agentes` already holds
    and, for every target file, its bytes, lines, line endings, encoding and
@@ -272,7 +290,10 @@ lines apart, read them as one.
 **4. WRITE THE BLOCKS.** Load the `code-doc-standard` skill once, before the
 first block. If any item creates or changes a field, filter, button, section,
 select, calendar or chart, load the `avansat-ui` skill too and follow it: Form
-class methods, Chosen, the house date pickers, Chart.js v4 and its palette. Then write ONE file per target, `WORK/BLOQUES_<archivo>.txt`,
+class methods, Chosen, the house date pickers, Chart.js v4 and its palette. If the target
+lives in the `consultor` repo (Avansat Financiero), load `financiero-consultor` instead of
+`avansat-ui` (DinamicHtml screens, `CONS.`/`OTRA.` prefixes, `Consulta` transactions,
+utf8_decode/utf8_encode at the AJAX edge). Then write ONE file per target, `WORK/BLOQUES_<archivo>.txt`,
 holding all its blocks in file order:
 
     ---TRANSFER_BLOCK---

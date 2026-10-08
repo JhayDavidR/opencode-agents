@@ -120,6 +120,7 @@ escribes la tuya). Toda respuesta queda escrita en un archivo: el chat no es evi
 | `/impacto <id> [simbolos]` | avansat_expert | revision independiente antes de tocar algo sensible |
 | `/equivalencia <id> <archivo>` | avansat_expert | PORTE: donde va cada cambio de la referencia en el objetivo y que cambia |
 | `/implementar <id> [archivo] [items N,M]` | implementer | codigo NUEVO (incluye certificado de impacto propio); con `items N` solo esos items (correccion puntual) |
+| `/revisar <id> <archivo>` | avansat_expert (modo revision) | despues de cada escritura de un archivo y antes del siguiente: revisa contra el requerimiento, ejecuta el plan de prueba y deja los hallazgos aprobados como criterios `REVISION` (seccion 3.1) |
 | `/migrar <id> [DEST] [SRC]` | migrator | mismo archivo, de copia vieja a copia limpia |
 | `/migrar-curado <id> <BLOQUES> [n]` | migrator | aplicar un BLOQUES ya generado y filtrado a mano, sin regenerar |
 | `/comentarios <id> <archivo> [lineas]` | migrator | corregir solo los comentarios del id en un archivo ya escrito |
@@ -130,6 +131,7 @@ escribes la tuya). Toda respuesta queda escrita en un archivo: el chat no es evi
 | `/reporte [horas] [notas]` | time_report | cierre del dia |
 
 Recorridos tipicos:
+- cada archivo de un id `nuevo`: `/implementar <id> <archivo>` -> `/revisar <id> <archivo>` -> (si hubo hallazgos) `/implementar <id> <archivo> items N` -> `/revisar` del delta -> siguiente archivo. El router lo pide solo
 - ajuste despues de probar (id ya implementado): `/cambio <id> <ajuste>` -> `/siguiente <id>` -> `/implementar <id> <archivo> items N` (sesion nueva) -> prueba -> `/commit <id> fix`
 - cambio menor sin documento: `/spec <id> cambio: ...` -> `/implementar` -> prueba -> `/documentar` -> `/commit` -> `/reporte`
 - id pequeno con documento: `/leer` -> `/spec` -> `/implementar` -> prueba en navegador -> `/documentar` -> `/commit` -> `/reporte`
@@ -139,20 +141,47 @@ Recorridos tipicos:
 
 `<id>` en los comandos es el NOMBRE DE LA CARPETA del id (ej. 566647_v2). El numero de los comentarios sale del campo `id:` del ID_SPEC.
 
-## 3.1 Correccion puntual (sin que el analista ni el implementador recorran todo)
+## 3.1 Retomar codigo que no funciono (correccion puntual)
 
-Cuando la prueba en navegador falla en un punto concreto:
+Codigo ya escrito que no cumple se corrige SIEMPRE igual: el defecto se vuelve un criterio
+del item, el router ve que la huella del item cambio y el implementer corrige solo eso. Nunca
+se edita el archivo a mano ni se vuelve a correr el archivo entero. Hay tres entradas al ciclo:
 
-1. `/cambio <id> <lo que fallo, en tus palabras>` (analista, modelo flash). No lee codigo:
-   relaciona tu texto con los items, te confirma con UNA pregunta y actualiza SOLO esos items.
-   Si el cambio toca la ruta o una regla de negocio, te dice que va por `/spec`.
-2. `/siguiente <id>`. El router compara la huella de cada item con la de su ultima
+| de donde sale | comando | quien escribe el criterio |
+|---|---|---|
+| revision despues de escribir (lo normal en un id `nuevo`) | `/revisar <id> <archivo>` | avansat_expert, con tu aprobacion (una pregunta) |
+| la prueba en navegador fallo en un punto concreto | `/cambio <id> <lo que fallo, en tus palabras>` | analista (modo cambio), con tu confirmacion |
+| cambias una decision ya tomada (ej. como tratar duplicados) | `/cambio <id> <la decision nueva>` | analista: la anota como `reemplaza a "<decision anterior>"` y toca cada item cuyo codigo depende de ella |
+
+El criterio va en el item del ARCHIVO DONDE VIVE EL CODIGO, aunque el sintoma se vea en otro
+(el total del resumen sale mal en pantalla, pero se calcula en la clase: el criterio va al
+item de la clase). Formato: `- REVISION <AAAA-MM-DD>: <comportamiento observable>`; puede
+nombrar el metodo, la columna o el mensaje, nunca trae codigo. Ejemplo real (587624, item 6):
+`- REVISION 2026-10-07: las filas POR VERIFICAR EN RNDC graban fec_ingres en formato de la
+base (AAAA-MM-DD HH:MM:SS); hoy GetUniversoPorVerificar lo entrega como dd/mm/aaaa y la
+columna es datetime`.
+
+Despues, siempre los mismos pasos:
+
+1. `/siguiente <id>`. El router compara la huella de cada item con la de su ultima
    aplicacion (REGISTRO.jsonl) y te da el comando exacto con SOLO los items que cambiaron:
    `/implementar <id> <archivo> items N`. Los items que no cambiaron no se vuelven a revisar.
-3. `/new` y ese comando (implementer, modelo flash, esfuerzo high). En modo delta corre
+2. `/new` y ese comando (implementer, modelo flash, esfuerzo high). En modo delta corre
    `id_workspace.py contexto <id> <archivo> --items N` en lugar de leer el spec, el ACTA y
-   el IMPACTO completos (en 548866/ajax.php: 15 KB contra 117 KB).
+   el IMPACTO completos (en 548866/ajax.php: 15 KB contra 117 KB), y no toca nada fuera de
+   los criterios nuevos.
+3. `/revisar <id> <archivo>` del delta: confirma los criterios nuevos y que el diff no tiene
+   nada mas. Si vuelve a encontrar algo, el ciclo se repite con esos items.
 4. Prueba en navegador. Si pasa: `/commit <id> fix`.
+
+`/revisar` ejecuta lo que se puede ejecutar sin navegador (clases, lectura de archivos,
+calculos, asientos) con `probar-archivo`: PHP 5.4, sin BD, con un plan en
+`pruebas/PRUEBA_<archivo>.json` que se queda como prueba de regresion del archivo y se vuelve a
+correr en cada revision. Para eso el id necesita en `pruebas/` los archivos de prueba y un
+`ESPERADO.md` con el resultado esperado de cada uno (los prepara el analista o tu en `/spec`).
+Pantallas y JS se revisan leyendo el codigo; lo que solo se ve en el navegador queda listado
+en la revision. Si no quieres revisar una escritura:
+`id_workspace.py revision <id> <archivo> --omitir` (queda constancia y el router sigue).
 
 Si un item queda YA_APLICADO sin escribir, el implementer corre
 `id_workspace.py verificado <id> <archivo> --items N` y el router deja de pedirlo.
@@ -199,9 +228,14 @@ Escribir el prompt sin comando NO cambia de agente: en ese caso elige el agente 
 | 4 | flujo entre archivos (solo si son 2 o mas) | **avansat_expert** | `/mapa <id>` | MAP.json |
 | 5 | impacto independiente (solo si toca algo sensible) | **avansat_expert** | `/impacto <id>` | IMPACTO.json |
 | 6 | implementar, un archivo por sesion | **implementer** | `/implementar <id> <archivo>` | CERTIFICADO, BLOQUES, REGISTRO |
+| 6b | revisar esa escritura antes del siguiente archivo (y cada delta) | **avansat_expert** | `/revisar <id> <archivo>` | REVISION_<archivo>.md, pruebas/PRUEBA_<archivo>.json; criterios `REVISION` en el ID_SPEC |
 | 7 | prueba funcional | tu (navegador) | criterios + pruebas negativas del ID_SPEC | notas de prueba |
 | 8 | manual tecnico | **documenter** | `/documentar <id> <que se probo>` | DOCUMENTACION_TECNICA_ID<id>.html |
 | 9 | reporte del dia | **time_report** | `/reporte <horas> <notas>` | texto para copiar |
+
+Puedes ir subiendo a dev por bloques (ej. clase + ajax + parametrizacion, luego la pantalla de
+cargue): los archivos nuevos solo se alcanzan desde las opciones de menu del id. Usa `/commit`
+o, si commiteas a mano, registralo (seccion 3.2).
 
 ### Tipo `porte` (existe en otro modulo con logica distinta)
 
@@ -249,6 +283,8 @@ ajustar con la evidencia de cada piloto.
 | analista | `/cambio` (ajuste pequeno) | zai-coding-plan/glm-5.3-flash | byteplus/deepseek-v4-flash | normal |
 | avansat_expert | SCOPE / MAP | zai-coding-plan/glm-5.3-flash | byteplus/deepseek-v4-flash | max |
 | avansat_expert | EQUIVALENCIA / IMPACTO | zai-coding-plan/glm-5.3-flash (validado en piloto 566647) | zai-coding-plan/glm-5.3 si el resultado trae muchas `confidence: baja` o falla la revision | max |
+| avansat_expert | REVISION de la primera escritura de un archivo | zai-coding-plan/glm-5.3 (razona contra el requerimiento: un error que se escapa llega a produccion) | zai-coding-plan/glm-5.2 | max |
+| avansat_expert | REVISION de un delta | zai-coding-plan/glm-5.3-flash | byteplus/deepseek-v4-flash | high |
 | implementer | codigo nuevo con riesgo: SQL dentro de transacciones, logica que se cruza con otra funcionalidad (ej. el Prevalidador en class_manifi), codigo central de todos los clientes (ws_rndc), porte | zai-coding-plan/glm-5.3 | byteplus/deepseek-v4-pro | max |
 | implementer | codigo nuevo local y con patron en el mismo archivo: un check o campo en pantalla, mostrar/ocultar por AJAX, una columna condicional en un INSERT/UPDATE, un dato informativo (validado en 562380: ajax.php de vehicu) | zai-coding-plan/glm-5.3-flash | byteplus/deepseek-v4-flash | high |
 | implementer | delta con `items N` (1-2 bloques, criterios concretos) o verificacion YA_APLICADO | zai-coding-plan/glm-5.3-flash | byteplus/deepseek-v4-flash | high |
@@ -284,7 +320,7 @@ Anota en `/reporte` (notas) que modelo usaste en cada paso mientras se estandari
 | `../REQUERIMIENTO_<carpeta>.md` (raiz del id) | lector, o analista con `cambio:` | analista, documenter |
 | `../_requerimiento/` (fuentes, img, EXTRACCION.md) | leer_requerimiento.py | lector |
 | ID_SPEC.md (con Ruta de desarrollo, Decisiones, Trazabilidad) | tu, o analista (`/spec`) | todos |
-| ID_SPEC_anterior_<fecha>.md | analista, al aplicar una propuesta que aprobaste | tu |
+| ID_SPEC_anterior_<fecha>.md | analista, al aplicar una propuesta que aprobaste; `revision --incorporar` | tu |
 | ACTA_<archivo>.md | implementer, migrator (una seccion por corrida, nunca se borra) | documenter, la siguiente corrida |
 | lotes/<fecha>_BLOQUES_*.txt | apply_blocks.py (copia del lote tal como se aplico) | documenter, retrabajo |
 | PRUEBAS.md | documenter (tus notas de prueba, con fecha) | documenter |
@@ -292,6 +328,8 @@ Anota en `/reporte` (notas) que modelo usaste en cada paso mientras se estandari
 | SCOPE.json, MAP.json, IMPACTO.json | avansat_expert | implementer, documenter |
 | EQUIVALENCIA_<archivo>.json, ITEMS_<archivo>_BORRADOR.md | avansat_expert | tu (revision), implementer, documenter |
 | CERTIFICADO_<archivo>.md | implementer | documenter |
+| REVISION_<archivo>.md | avansat_expert (`/revisar`); `revision --incorporar/--omitir` de id_workspace.py | router (revisado o no), documenter, la siguiente revision |
+| ../pruebas/PRUEBA_<archivo>.json | avansat_expert (`/revisar`), o tu | probar_php.py en cada revision |
 | BLOQUES_<archivo>.txt | implementer, migrator | apply_blocks, documenter |
 | REGISTRO.jsonl | apply_blocks.py (--registro); `verificado` y `sellar` de id_workspace.py | documenter, router, /commit |
 | respaldos/<archivo>.PRE_<fecha>.bak | apply_blocks.py (estado original antes de cada lote; fuera del repo) | tu, documenter |

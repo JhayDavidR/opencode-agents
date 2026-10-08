@@ -54,6 +54,13 @@ USO
   python id_workspace.py verificado <carpeta> <archivo> --items N,M
                                                   deja en REGISTRO que esos items ya estaban
                                                   en el archivo (corrida sin escritura)
+  python id_workspace.py revision  <carpeta> <archivo> --incorporar
+                                                  pasa al ID_SPEC los criterios aprobados de
+                                                  _agentes/REVISION_<archivo>.md (los de /revisar):
+                                                  'REVISION <fecha>: ...' en cada item nombrado y sus
+                                                  decisiones; el router pide luego el /implementar delta
+  python id_workspace.py revision  <carpeta> <archivo> --omitir
+                                                  el desarrollador decide no revisar esa escritura
   python id_workspace.py sellar    <carpeta>      toma como aplicados los items vigentes de los
                                                   archivos ya escritos (una vez, en ids en curso)
   python id_workspace.py normalizar <carpeta>     pasa las rutas del ID_SPEC y del REGISTRO a
@@ -92,6 +99,8 @@ SCRIPT = 'python .opencode/skills/id-workspace/id_workspace.py'
 MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
          'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 CONFIG = os.path.join(os.path.expanduser('~'), '.opencode_oet_rutas.json')
+# /revisar se pide solo para escrituras desde esta fecha: los ids anteriores no se reabren.
+REVISION_DESDE = '2026-10-08'
 
 
 def leer_config():
@@ -902,6 +911,29 @@ def ruta_del_flujo(ctx):
             if not items:
                 notas.append('%s no tiene items en el ID_SPEC: sobra en Archivos objetivo o falta su item' % a['nombre'])
             siguiente = siguiente or (bloqueo or cmd + '   (sesion nueva: /new)')
+        if a['aplicado'] and escrituras:
+            # Revision independiente de la ultima escritura (/revisar) antes de seguir con
+            # el siguiente archivo: lo que el lint y la autorrevision del implementer no ven.
+            ultima = max(f.get('fecha', '') for f in escrituras)
+            rev = os.path.join(ctx['trabajo'], 'REVISION_%s.md' % a['nombre'])
+            revisada = (os.path.isfile(rev) and
+                        datetime.datetime.fromtimestamp(os.path.getmtime(rev)).isoformat() >= ultima)
+            texto_rev = _leer_txt(rev) or '' if revisada else ''
+            if revisada and veredicto_revision(rev) == 'CON_HALLAZGOS' and not re.search(r'^incorporado:', texto_rev, re.M):
+                # La revision encontro algo y no llego a la aprobacion (paso 9 de /revisar): los
+                # hallazgos se perderian si el router la diera por cerrada.
+                pasos.append(('[!]', 'REVISION_%s.md tiene hallazgos sin aprobar ni incorporar' % a['nombre']))
+                siguiente = siguiente or (bloqueo or (
+                    'aprueba los hallazgos de _agentes/REVISION_%s.md: copia los que apruebes a "## Criterios '
+                    'aprobados" (- item N: texto) y corre %s revision %s %s --incorporar; si no apruebas '
+                    'ninguno, escribe "incorporado: ninguno" al final del archivo' % (a['nombre'], SCRIPT, c, a['nombre'])))
+            elif revisada:
+                pasos.append(('[x]', 'revisado %s (%s)' % (a['nombre'], veredicto_revision(rev))))
+            elif ultima >= REVISION_DESDE:
+                cmd = '/revisar %s %s' % (c, a['nombre'])
+                pasos.append(('[ ]', '%s   (escritura del %s; para no revisarla: %s revision %s %s --omitir)'
+                              % (cmd, ultima[:16].replace('T', ' '), SCRIPT, c, a['nombre'])))
+                siguiente = siguiente or (bloqueo or cmd + '   (sesion nueva: /new)')
         if not items and escrituras:
             # Un item que reparte su logica entre dos archivos deja a uno sin item: el
             # router nunca lo vuelve a pedir y un /cambio de esa logica no llega a el.
@@ -1504,6 +1536,115 @@ def cmd_verificado(base, archivo, numeros):
     return 0
 
 
+def veredicto_revision(ruta):
+    m = re.search(r'^veredicto:\s*(\S+)', _leer_txt(ruta) or '', re.M)
+    return m.group(1) if m else 'sin veredicto'
+
+
+def _insertar_en_item(texto, n, linea):
+    """Agrega '- linea' al final de criterios_aceptacion del item n (antes de no_tocar:)."""
+    ini = texto.find('### Item %s\n' % n)
+    if ini < 0:
+        return texto, False
+    fin = texto.find('\n### Item ', ini + 5)
+    fin = len(texto) if fin < 0 else fin
+    bloque = texto[ini:fin]
+    k = bloque.find('\nno_tocar:')
+    if k < 0:
+        return texto, False
+    return texto[:ini] + bloque[:k + 1] + '- %s\n' % linea + bloque[k + 1:] + texto[fin:], True
+
+
+def cmd_revision(base, archivo, modo):
+    """/revisar deja REVISION_<archivo>.md con '## Criterios aprobados' (- item N: texto) y
+    '## Decisiones' (- texto). --incorporar los escribe en el ID_SPEC: la huella de esos items
+    cambia y el router pide el /implementar delta. --omitir deja constancia de no revisar."""
+    ctx = contexto(base)
+    spec = ctx['spec']
+    if spec is None:
+        print('FALTA: ID_SPEC.md')
+        return 3
+    ruta, _ = objetivo_por_nombre(spec, base, archivo)
+    if not ruta:
+        print('NO_EN_SPEC: %s no esta en Archivos objetivo del ID_SPEC' % archivo)
+        return 3
+    nombre = etiqueta(ruta, spec, base)
+    rev = os.path.join(ctx['trabajo'], 'REVISION_%s.md' % nombre)
+    ahora = datetime.datetime.now()
+    if modo == '--omitir':
+        with open(rev, 'w', encoding='utf-8', newline='\n') as fh:
+            fh.write('# REVISION %s\nfecha: %s\nveredicto: OMITIDA\nEl desarrollador decidio no revisar '
+                     'esta escritura.\n' % (nombre, ahora.isoformat(timespec='minutes')))
+        print('REVISION OMITIDA %s -> %s' % (nombre, rev))
+        return 0
+    texto_rev = _leer_txt(rev)
+    if texto_rev is None:
+        print('FALTA: %s (lo escribe /revisar %s %s)' % (rev, os.path.basename(base), nombre))
+        return 3
+    if re.search(r'^incorporado:', texto_rev, re.M):
+        print('YA INCORPORADO: %s (una revision nueva la escribe /revisar)' % rev)
+        return 0
+
+    def seccion(titulo):
+        m = re.search(r'^## %s[^\n]*\n(.*?)(?=^## |\Z)' % titulo, texto_rev, re.M | re.S)
+        return [l.strip()[2:].strip() for l in (m.group(1).splitlines() if m else [])
+                if l.strip().startswith('- ')]
+    criterios = []
+    for l in seccion('Criterios aprobados'):
+        m = re.match(r'item\s+(\w+)\s*:\s*(.+)$', l, re.I)
+        if not m:
+            print('ERROR: linea de criterio sin formato "- item N: texto": %s' % l)
+            return 4
+        criterios.append((m.group(1), m.group(2).strip()))
+    decisiones = [l for l in seccion('Decisiones') if l.lower() not in ('ninguna', 'ninguno')]
+    if not criterios and not decisiones:
+        print('SIN CAMBIOS: %s no trae criterios aprobados ni decisiones' % rev)
+        return 0
+    numeros = [i['n'] for i in spec['items']]
+    ajenos = sorted(set(n for n, _ in criterios if n not in numeros))
+    if ajenos:
+        print('ERROR: items %s no existen en el ID_SPEC' % ','.join(ajenos))
+        return 4
+    ruta_spec = os.path.join(ctx['trabajo'], 'ID_SPEC.md')
+    with open(ruta_spec, 'rb') as fh:
+        crudo = fh.read().decode('utf-8')
+    crlf = '\r\n' in crudo
+    texto = crudo.replace('\r\n', '\n')
+    respaldo = os.path.join(ctx['trabajo'], 'ID_SPEC_anterior_%s.md' % ahora.strftime('%Y-%m-%d_%H%M'))
+    shutil.copyfile(ruta_spec, respaldo)
+    fecha = ahora.strftime('%Y-%m-%d')
+    tocados = []
+    for n, crit in criterios:
+        linea = 'REVISION %s: %s' % (fecha, crit)
+        if linea in texto:
+            continue
+        texto, ok = _insertar_en_item(texto, n, linea)
+        if not ok:
+            print('ERROR: el item %s no tiene linea no_tocar: donde insertar (nada se escribio)' % n)
+            return 4
+        if n not in tocados:
+            tocados.append(n)
+    if decisiones:
+        m = re.search(r'^## Decisiones del desarrollador[^\n]*\n', texto, re.M)
+        if not m:
+            print('ERROR: el ID_SPEC no tiene la seccion ## Decisiones del desarrollador (nada se escribio)')
+            return 4
+        fin = texto.find('\n## ', m.end())
+        fin = len(texto) if fin < 0 else fin
+        cuerpo = texto[m.end():fin].rstrip('\n') + '\n'
+        cuerpo += ''.join('- %s %s (/revisar %s)\n' % (fecha, d, nombre) for d in decisiones)
+        texto = texto[:m.end()] + cuerpo + texto[fin:]
+    with open(ruta_spec, 'wb') as fh:
+        fh.write((texto.replace('\n', '\r\n') if crlf else texto).encode('utf-8'))
+    with open(rev, 'a', encoding='utf-8', newline='\n') as fh:
+        fh.write('\nincorporado: %s items %s, %d decision(es)\n'
+                 % (ahora.isoformat(timespec='minutes'), ','.join(tocados) or '-', len(decisiones)))
+    print('INCORPORADO %s -> ID_SPEC (respaldo %s): items %s, %d decision(es)'
+          % (os.path.basename(rev), os.path.basename(respaldo), ','.join(tocados) or '-', len(decisiones)))
+    print('SIGUIENTE: /siguiente %s   (pide el /implementar con solo esos items)' % os.path.basename(base))
+    return 0
+
+
 def cmd_sellar(base):
     """Paso unico para ids en curso: los items vigentes de cada archivo que el router
     ya da por aplicado quedan con huella. Desde ahi solo vuelve lo que cambie."""
@@ -1610,7 +1751,7 @@ def cmd_normalizar(base):
 def main():
     args = sys.argv[1:]
     acciones = ('raices', 'configurar', 'ruta', 'estado', 'siguiente', 'init', 'items',
-                'contexto', 'verificado', 'sellar', 'normalizar')
+                'contexto', 'verificado', 'sellar', 'normalizar', 'revision')
     if not args or args[0] not in acciones:
         print(__doc__)
         return 4
@@ -1639,6 +1780,14 @@ def main():
         return cmd_sellar(base)
     if accion == 'normalizar':
         return cmd_normalizar(base)
+    if accion == 'revision':
+        resto = [x.strip().strip('"') for x in args[2:]]
+        archivo = resto[0] if resto and not resto[0].startswith('--') else ''
+        modo = '--omitir' if '--omitir' in resto else ('--incorporar' if '--incorporar' in resto else '')
+        if not archivo or not modo:
+            print('ERROR: revision requiere <carpeta> <archivo> --incorporar | --omitir')
+            return 4
+        return cmd_revision(base, archivo, modo)
     if accion in ('contexto', 'verificado'):
         resto = args[2:]
         archivo = resto[0].strip().strip('"') if resto and not resto[0].startswith('--') else ''

@@ -77,6 +77,7 @@ No hay un LLM "director" encima de los demás. La orquestación se apoya en cinc
 | `/cambio <id> <ajuste>` | analista | Ajuste pequeño a un spec existente, sin releer código |
 | `/scope`, `/mapa`, `/impacto`, `/equivalencia` | avansat_expert | Alcance, flujo entre archivos, impacto en lectores y porte entre módulos |
 | `/implementar <id> [archivo] [items N]` | implementer | Código nuevo, archivo por archivo, o solo los ítems que cambiaron |
+| `/revisar <id> <archivo>` | avansat_expert | Revisa cada escritura contra el requerimiento, ejecuta su plan de prueba y deja los hallazgos aprobados como criterios para el delta |
 | `/migrar`, `/migrar-curado`, `/comentarios` | migrator | Llevar cambios de una copia vieja a una limpia y corregir comentarios |
 | `/comparar <a> <b>` | comparator_agent | Depurar o comparar versiones |
 | `/documentar <id> <qué se probó>` | documenter | Manual técnico con trazabilidad |

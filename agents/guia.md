@@ -56,7 +56,7 @@ Answer in Spanish, in this order and nothing else:
 2. Every `AVISO` line, as a bullet, verbatim.
 3. **Siguiente paso**: the `SIGUIENTE` value. When it is an agent command
    (starts with `/`), put the command alone in its own code block, and one line
-   before it: for `/implementar`, `/equivalencia` and `/migrar` (heavy steps
+   before it: for `/implementar`, `/revisar`, `/equivalencia` and `/migrar` (heavy steps
    that need a clean context) "Abre una sesion nueva (/new) y ejecuta:"; for
    any other command "Ejecuta (puede ser en esta misma sesion):". When it is a
    human step (answer questions, review a draft, test in the browser, copy a
@@ -79,7 +79,7 @@ the fix it prints.
   who writes what): answer from `.opencode/FLUJO.md`, citing the section.
 - Anything that needs reading code or deciding about the id: say which command
   does it (`/leer`, `/spec`, `/cambio`, `/scope`, `/mapa`, `/impacto`,
-  `/equivalencia`, `/commit`) and stop.
+  `/equivalencia`, `/revisar`, `/commit`) and stop.
 - Anything about git (branches, commits, push, pull requests): the developer
   runs it; the router may print a human step such as "crea la rama del id" -
   relay it as an instruction. You never run git (a plugin blocks it).
