@@ -135,7 +135,8 @@ and in the bitacora - is the `id:` field of the ID_SPEC, never the folder name.
 run. Replace steps 1-3 below with ONE command:
 `python .opencode/skills/id-workspace/id_workspace.py contexto <carpeta> <archivo> --items N`
 It prints the file facts (the baseline of step 6), the requested items in
-full, the Reglas globales, the binding decisions, the developer's answers
+full, the Reglas globales, the Matriz de casos (checked in step 6 like in a
+full run), the binding decisions, the developer's answers
 recorded in the ACTA plus its last run, and the IMPACTO/MAP/EQUIVALENCIA
 entries that mention the items' symbols. Do NOT run `estado`, do NOT read the
 whole ID_SPEC, ACTA or JSON files (open one only for an entry `contexto`
@@ -159,7 +160,10 @@ they did not change.
    `confirmada: si` (tell the user to run `/spec <carpeta>`), or `Preguntas
    abiertas` is not empty - relay those questions, nothing else. If `tipo:
    migracion`, stop and tell the user to run `/migrar` instead. Read the
-   spec's `Decisiones del desarrollador`: they are binding. If
+   spec's `Decisiones del desarrollador` and `Matriz de casos`: they are
+   binding. Each item's `casos:` line names the cases its file must meet; an
+   item without that line but whose code decides by those conditions must
+   meet every case of the matrix that its screen can reach. If
    `WORK/ACTA_<archivo>.md` exists, read it: it records what earlier runs
    decided, applied or left BLOQUEADO for this file.
 3. If `IMPACTO.json`, `MAP.json`, `SCOPE.json` or `EQUIVALENCIA_<archivo>.json`
@@ -225,13 +229,17 @@ lines apart, read them as one.
 - Hunt what the script cannot see: a value travelling through an intermediate
   variable, a name built at runtime, an SQL column, a visible text or a hidden
   field used as a condition in ANOTHER file.
-- Duplication guard: if the step-1 DESGLOSE shows a function of the same file
-  that already returns what a block re-implements (same table and filter) and
-  the spec does not say which one to use, ask the developer with the question
-  tool whether to reuse it. Using an existing function of the same file is
-  not a new abstraction (Spaghetti rule 4 does not forbid it); the spec or
-  the developer decides, never the silence of the spec. Record the answer in
-  the ACTA (step 9b).
+- Duplication guard (Spaghetti rule 3a): the item's `reutiliza:` line is
+  binding - use what it names. Then, for every query, function, variable or
+  JS branch your blocks would CREATE, search the file before writing it
+  (`read_file.py <file> --find "<tabla>"`, the function name, the variable):
+  a variable already in scope, a function of the same file/class, a query of
+  the same flow on the same table and key (add the column to it), or a JS
+  branch that already does it. If one exists and the spec does not name it,
+  ask the developer with the question tool whether to reuse it. Using an
+  existing function of the same file is not a new abstraction (Spaghetti
+  rule 4 does not forbid it); the spec or the developer decides, never the
+  silence of the spec. Record the answer in the ACTA (step 9b).
 - Verdict:
   - `SEGURO`: every reader is `no afectado` or `afectado previsto`, with a
     reason you can cite as file:line.
@@ -245,6 +253,16 @@ lines apart, read them as one.
   - `BLOQUEADO`: you cannot tell (symbol absent, scope incomplete, logic you
     could not read). Write no block. `BLOQUEADO` is a valid answer; a `SEGURO`
     without evidence is not.
+- Matriz de casos, per item: for each case it must meet, the place in THIS
+  file that decides it (file:line of every condition, render, default of a
+  check and total that the case passes through) and the expected result. An
+  item that says it mirrors another item or screen is certified against the
+  matrix here, never by copying that item's diff: the two files differ in
+  variables, line order and extra branches. If the spec has no matrix but
+  the item's logic is a combination of conditions (a regime overwritten by
+  another, a parameter paired with a record flag, an obligation), list the
+  combinations you find in the code in the CERTIFICADO and ask with the
+  question tool for any whose result the spec does not settle.
 - Write `WORK/CERTIFICADO_<archivo>.md`: per item, verdict, the DESGLOSE line,
   the readers table (file:line, classification, reason), the existing
   functions that already provide this logic (`ninguna` or name with
@@ -272,6 +290,12 @@ holding all its blocks in file order:
 - One block per non-contiguous location. Blocks must not overlap.
 - search_block: copied from a read of THIS session, anchored per the skill's
   anchor rule. Never from memory.
+- NEW file (its `Archivos objetivo` entry says `nuevo: si` and `estado` prints
+  `[NUEVO]`): exactly ONE block for that file, with an EMPTY search_block (leave
+  one blank line between `search_block:` and `replace_block:`) and the whole file
+  in replace_block. apply_blocks creates it in ISO-8859-1 with CRLF. Follow the
+  sibling file the spec names for structure and includes. Once created, later
+  runs anchor on its real content like any other file.
 - replace_block: Spaghetti rules, PHP 5.4 table, the spec's `Reglas globales`
   and `no_tocar`, comments per the skill. Only ISO-8859-1 characters.
 - Lines listed in the spec's `Cambios ajenos al id` never carry the id marker.
@@ -297,6 +321,20 @@ fixes per block at most; after that, stop this file and report the stdout.
   aplica` (why) | `NO CUMPLE`. A `NO CUMPLE` is fixed before applying. Write
   this checklist in the ACTA (step 9b). An impact verdict `SEGURO` says who is
   affected; it never says the code meets the rules - this check does;
+- **Matriz de casos, case by case**: for EVERY case the items of this run
+  must meet, take each changed condition of the printed diff, put in the
+  case's values and evaluate it - `&&` binds tighter than `||`, so write the
+  grouping out before deciding - and follow it to what the screen shows,
+  which check is marked and what travels in the POST. One line per case:
+  `cumple` (the diff line that produces it) | `NO CUMPLE`. A `NO CUMPLE` is
+  fixed before applying. Cases that say "como hoy" are the regressions this
+  check exists for: verify them as carefully as the new behavior;
+- **moved code**: when a block moves a computation (a query, an assignment)
+  to an earlier place, the old copy is gone entirely - run
+  `read_file.py <file> --find "<variable> ="` and confirm nothing reassigns
+  the moved variables between the new place and their uses;
+- **comments** state only what the diff does; a comment that claims a value
+  is computed somewhere must point to the line that computes it;
 - **no repetition inside the id**: no sequence of more than 5 executable lines
   appears twice in this run's blocks, nor repeats code the id already applied
   to this file (read it in the file). If it would, write it ONCE as a new
@@ -304,7 +342,13 @@ fixes per block at most; after that, stop this file and report the stdout.
   each place; ask with the question tool if the spec does not already decide
   it. No line of the file that is not the id's is duplicated either (a
   declaration, an assignment or a query that already exists above or below
-  the block is reused, not written again).
+  the block is reused, not written again);
+- **reuse**: list every SELECT, function, method and JS branch your blocks
+  ADD. For each, name the existing one you searched for (rule 3a) and why it
+  does not serve. A new SELECT on a table the same flow already reads by the
+  same key, or a JS body that repeats the body of an existing branch of the
+  same function, is a defect: rewrite reusing it. The list goes in the ACTA
+  line `reutiliza:`.
 Fix and re-simulate if needed. This review replaces the old comparator step.
 
 **7. APPLY.** If the spec says `confirmar_antes_de_aplicar: si`, ask with the
@@ -342,7 +386,9 @@ it so the router stops asking for them:
     preguntas y respuestas: <each question you asked and the developer's literal answer, or "ninguna">
     autorrevision: <what step 6 checked on the printed diff and what you fixed>
     reglas globales: <one line per rule: cumple (diff line) | no aplica | NO CUMPLE -> corregido>
+    matriz: <one line per case of the items' casos: cumple (diff line) | NO CUMPLE -> corregido | sin matriz>
     repeticion: <"ninguna" or the method of the id that now holds the shared logic>
+    reutiliza: <per added SELECT/function/branch: what existing one was reused (file:line) or "nuevo: <que se busco y por que no sirve>">
     ya aplicado: <per YA_APLICADO item, the criterion lines checked and the code line that proves each>
     aplicacion: <the ESCRITO, LOTE and REGISTRO lines of apply_blocks, or "no aplicado: <por que>">
     lint: <the LINT line>
@@ -354,8 +400,9 @@ decided in this chat and is not in the ACTA or the spec is lost.
 **10. REPORT** in Spanish, compact:
 - table per file: bloques, lineas +/-, bytes antes/despues, lint;
 - verdict per item, and the question for every RIESGO / BLOQUEADO;
-- `pruebas`: the spec's criterios_aceptacion plus pruebas_negativas, and any
-  negative case the certificate added;
+- `pruebas`: the spec's criterios_aceptacion plus pruebas_negativas, one test
+  per case of the matrix this file meets (the "como hoy" ones included), and
+  any negative case the certificate added;
 - always close with: prueba funcional en navegador pendiente.
 
 # Large ids
@@ -371,7 +418,17 @@ Never leave a file half-applied.
 1. Minimal change: only what the item asks.
 2. No refactoring, renaming, extracting or reorganizing.
 3. Respect the ugly style: indentation, tabs/spaces, naming, long lines.
-3b. No loose queries: every NEW SQL query of the id (SELECT, INSERT, UPDATE,
+3a. Reuse first, in this order, before writing any query, function or branch:
+   (1) a variable already in scope that holds the datum; (2) a function or
+   method of the same file/class that returns it (also if called from another
+   flow); (3) a query of the same flow on the same table and key - add the
+   column to its SELECT, do not write a second one; (4) in JS, the branch that
+   already does it - change the condition so the new case falls into it,
+   never copy its body. Applies to PHP and JS alike. Replacing a LEGACY query
+   by a better existing function is a legacy change: only if the spec says so.
+   Moving a legacy block is allowed only when the spec says so; the block
+   moves whole and the old place is removed in the same run.
+3b. No loose queries: only when 3a found nothing, every NEW SQL query of the id (SELECT, INSERT, UPDATE,
    information_schema, parameter lookups not done through the existing
    helpers such as getValidaParametros / getExistParame) goes in a method of
    the id's class with its docblock marker; the flow only calls it. A new
@@ -392,6 +449,12 @@ Never leave a file half-applied.
 5. Follow the file's patterns (if/else chains, concatenation, `array()` vs
    `[]` - match the surrounding lines, never convert an existing one).
 6. Preserve dead code and commented-out code.
+7. Messages to the user are ALWAYS SweetAlert (skill `avansat-ui` 5b), with the
+   library the screen already loads: `swal(...)` in liquidaciones, `sweetAlertN`
+   / `Swal.fire` in terceros, also when the message is echoed from PHP. A new or
+   modified line with a native `alert(` or `confirm(` is a defect: apply_blocks
+   rejects it (ESTANDAR, exit 3). Legacy alert lines the item does not touch
+   stay as they are.
 
 # PHP 5.4 Constraints
 

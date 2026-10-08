@@ -389,7 +389,7 @@ Method:
 
 1. **Enumerate the reference blocks mechanically.**
    `read_file.py <reference> --find "ID <id>"` lists every marker. A marker
-   without `// FIN ID` covers the fragment below it; a docblock marker covers
+   without a closing `// ---` (older ids: `// FIN ID`) covers the fragment below it; a docblock marker covers
    the whole function. Read each block's window. If the prompt or the spec
    names documentation of the id, use it to understand the intent, but the
    code on disk wins when they disagree - say so.

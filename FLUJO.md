@@ -95,6 +95,15 @@ acepta los dos modos segun lo que diga `Archivos objetivo`.
    REQUERIMIENTO). Alternativa sin agente: el chat externo con
    `.opencode/templates/PROMPT_ANALISIS.md`.
 
+**Matriz de casos.** Si el id decide algo por una combinacion de condiciones (regimen del
+tercero y de la empresa, un parametro general y la marca del registro, una obligacion), el
+analista escribe la seccion `Matriz de casos` del ID_SPEC: una linea por combinacion con su
+resultado, y "como hoy" en las que no cambian. Cada item lleva `casos:` y criterios propios
+para su archivo (nunca "igual que el item N"). El implementer certifica y revisa cada caso
+evaluando las condiciones del diff, y deja la linea `matriz:` en el ACTA; la prueba en el
+navegador recorre la matriz entera. Origen: en 556574 Actualizar copio a medias el cambio de
+Insertar y rompio el caso "empresa R.S.T." sin que el lint ni la autorrevision lo vieran.
+
 Las preguntas llegan con la herramienta `question` de OpenCode (eliges una opcion o
 escribes la tuya). Toda respuesta queda escrita en un archivo: el chat no es evidencia.
 
@@ -147,6 +156,11 @@ Cuando la prueba en navegador falla en un punto concreto:
 
 Si un item queda YA_APLICADO sin escribir, el implementer corre
 `id_workspace.py verificado <id> <archivo> --items N` y el router deja de pedirlo.
+Un item = un archivo: si un cambio mueve logica a otro archivo, ese archivo lleva su propio
+item. `/siguiente` avisa cuando un archivo tiene escrituras en REGISTRO.jsonl pero ningun item
+(un /cambio futuro de esa logica no llegaria a el); se corrige dandole su item y, si el codigo
+ya esta, con `verificado`. Los avisos de RIESGO/BLOQUEADO salen del veredicto de cada item en
+la ultima corrida de su ACTA (linea `items:`), solo para items que siguen pendientes.
 Los ids en curso antes de las huellas se sellan una vez con `id_workspace.py sellar <id>`
 (ya se hizo con 548866 y 548866_v2).
 
@@ -162,6 +176,11 @@ plugin `.opencode/plugins/sin-git.js`, que revisa todo comando antes de ejecutar
 y te da los comandos (`git add <archivos del id>`, `git commit -F <COMMIT_...txt>`) para que
 los corras tu desde el repo. Toma solo lo escrito desde el ultimo mensaje sugerido
 (`--todo` para todo el id).
+
+Si commiteas a mano (sin `/commit`), `/siguiente` lo nota (el commit del repo cambio desde la
+ultima escritura del id y no hay mensaje registrado) y te da la linea para registrarlo, asi el
+proximo `/commit` no vuelve a proponer esos archivos:
+`python .opencode/skills/commit-msg/commit_msg.py <id> --registrar <repo> --tipo <feat|fix>`
 
 ## 3b. Ruta estandar por tipo de id (quien hace cada paso)
 
@@ -307,6 +326,11 @@ Bitacora diaria: `.opencode/logs/AAAA-MM-DD.md`, o la carpeta de `configurar --l
   nunca con el repo en master/main (`RAMA_BASE`), nunca un archivo de repo desde un lote que no
   sea de un id, y avisa `AVISO_CAMBIO_EXTERNO` si el archivo cambio fuera del flujo desde su
   ultima escritura (editor, pull, cambio de rama).
+- Archivos nuevos (tipo `nuevo` con archivos que aun no existen): el ID_SPEC marca `nuevo: si` en
+  su entrada de `Archivos objetivo`; `estado` lo muestra `[NUEVO]` y el router no lo pide copiar.
+  `apply_blocks.py` lo crea solo con UN bloque de `search_block` vacio, en ISO-8859-1 y CRLF, si su
+  carpeta existe; el REGISTRO lo anota con `creado: true`. Sin `nuevo: si`, un archivo que no
+  existe sigue siendo `*** NO EXISTE ***`.
 - `protected_paths.txt`: los scripts de escritura se niegan a escribir en esas rutas (`PROTEGIDO`):
   `.git`, `_respaldos`, `node_modules`. Los repos ya no van ahi.
 - Los agentes no pueden abrir .php/.js/.htm/.inc con la lectura nativa (UTF-8): usan read_file.py.

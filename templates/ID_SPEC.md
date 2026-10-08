@@ -41,7 +41,9 @@ base de datos: <completar: DDL, quien lo aplica, aplicado si/no | sin cambios de
        {repo:sate_standa}\modulo\archivo.php   archivo del repo, en la rama del id (el caso normal)
        {id}\subcarpeta\archivo.php             copia en la carpeta del id (fuera de todo repo)
      Cada equipo las resuelve con 'id_workspace.py configurar'. apply_blocks solo escribe estos archivos.
-     fuente: solo en tipo migracion (la copia vieja, SRC, de solo lectura, en {id}). Borrala en los demas tipos. -->
+     fuente: solo en tipo migracion (la copia vieja, SRC, de solo lectura, en {id}). Borrala en los demas tipos.
+     nuevo: si -> el archivo no existe y lo crea el id (apply_blocks lo crea con un bloque de search vacio;
+     su carpeta debe existir). Borrala si el archivo ya existe. -->
 - ruta: {repo:sate_standa}\<completar: modulo\archivo>
   rol: <completar: frontend | ruta AJAX | logica de negocio | vista | informe>
   fuente: <completar solo en migracion: {id}\ruta de la copia vieja; borrar esta linea si no aplica>
@@ -67,6 +69,16 @@ base de datos: <completar: DDL, quien lo aplica, aplicado si/no | sin cambios de
 
 <!-- Reglas que aplican a TODOS los items, en palabras del dominio. Borra la linea si no hay. -->
 - <completar o borrar>
+
+## Matriz de casos
+
+<!-- Solo si el id decide algo por una combinacion de condiciones (regimen del tercero y de la
+     empresa, parametro general y marca del registro, obligacion, tipo de vinculacion, perfil).
+     Una linea por combinacion; las que el requerimiento no cambia dicen "como hoy". Cada item
+     que toca esa logica la cumple en SU archivo (linea casos: del item) y la prueba la recorre
+     entera. Borra la seccion si el id no condiciona nada. -->
+- (a) <completar: condicion> -> <completar: resultado esperado>
+- (b) <completar: condicion> -> como hoy
 
 ## Cambios ajenos al id
 
@@ -99,8 +111,10 @@ objetivo: <completar: que debe pasar, observable por el usuario>
 simbolos: <completar: variables, campos, funciones, columnas que se tocan o se leen>
 referencia: <solo porte: bloque de EQUIVALENCIA.json (R1, R2...) o archivo:funcion de la referencia; borrar si no aplica>
 adaptacion: <solo porte: que cambia respecto a la referencia por la logica propia del objetivo; borrar si no aplica>
+casos: <completar: letras de la Matriz de casos que este archivo debe cumplir, ej. a, b, d; borrar si no hay matriz>
+reutiliza: <completar: variable, funcion, consulta o rama existente en ESTE archivo que el item usa o extiende (archivo:linea), o "nada (buscado: <que> en <archivo>)">
 criterios_aceptacion:
-- <completar: resultado verificable>
+- <completar: resultado verificable en ESTE archivo; nunca "igual que el item N">
 no_tocar:
 - <completar: comportamiento o codigo que debe seguir igual>
 pruebas_negativas:

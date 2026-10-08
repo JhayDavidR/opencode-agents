@@ -119,6 +119,16 @@ questions" and "Method" below do NOT apply: follow only these steps.
      `ubicacion: <descripcion en palabras>; la localiza el implementer`.
    - It changes the scope of the route or a business rule the document
      settles: stop and say it needs `/spec <carpeta>` (full analysis).
+   - One item = one file, also here: if the change moves or adds logic in a
+     file no item has (e.g. a JS the PHP item now includes), add a new item
+     for THAT file, placed before the items that call it; the existing items
+     keep only what changes in their own file. Never stretch an item over
+     two files: the router routes by `archivo:` and would never send a later
+     fix to the other file.
+   - The change alters a combination of the spec's `Matriz de casos` (or adds
+     one): amend that case line and the `casos:` line of every item it
+     touches. A change that contradicts a case the developer already decided
+     goes in the confirmation question, with the case quoted.
 3. Confirm with ONE question (skill `preguntas-desarrollador`): "este cambio
    afecta los items N (archivo) y M (archivo): <resumen de lo que agregas>".
    Options: confirm (recommended) / other items / cancel. Anything the change
@@ -227,12 +237,28 @@ questions.
     hits is either named differently (search its visible label with
     `read_file.py <file> --find "<texto>"`) or does not exist yet: say which in
     the item, or ask.
-3b. **Reuse before creating**: when a symbol found in step 3 is a function or
-   method whose query or output overlaps an item's objective (same table,
-   same filter, same returned data), the item MUST say which one applies:
-   reuse or extend the existing function (default) or keep the inline logic.
-   An item that re-implements a query an existing function already wraps is
-   a spec defect.
+3b. **Reuse before creating** (PROMPT_ANALISIS rule 13): for every datum or
+   behavior an item needs (a tercero's column, the company's regime, a
+   recalculation, a message), search the item's file, in this order, and
+   write the result in the item's `reutiliza:` line:
+   1. a variable already in scope in the same function that holds it (an
+      array returned by an earlier call, a value queried a few lines above or
+      inside the loop);
+   2. a function or method of the same file/class that returns it or does it
+      (same table and filter, same output) - also when it is called in
+      another flow of the file;
+   3. a query already executed in the flow that reads the same table and key:
+      extend it with the column (house pattern: add the column to its
+      SELECT), do not write a second SELECT;
+   4. in JS, a function or a branch that already does it (e.g. the `else` of
+      CheckConcep that unchecks and recalculates): change the condition so
+      the new case falls in that branch, never copy its body.
+   Only when the four come up empty does the item create code, and then
+   `reutiliza: nada (buscado: <tabla/funcion/variable> en <archivo>)`. An
+   item that re-implements what an existing function, query or branch
+   already gives is a spec defect. If the reuse would change a LEGACY line
+   (e.g. replacing a legacy query by a better function), say so and ask;
+   a legacy query is not replaced just because a nicer function exists.
 4. **Locate each change**: read a window (`read_file.py <file> <ini> <fin>`,
    about 40 lines of margin) at the hits. `ubicacion` names the function,
    method, `case` or section; add "hoy lineas ~N" only for lines you read in
@@ -241,12 +267,39 @@ questions.
    calendar, button, chart), load the `avansat-ui` skill and name in the item
    the house component to use (Form method, Chosen, datepicker, Chart.js) and
    a sibling screen that already uses it.
-6. **Write the items** per the template and PROMPT_ANALISIS rules 1-6: one item
+5b. **Matriz de casos** (PROMPT_ANALISIS rules 10-12) - the step that
+   prevents the costliest errors of this flow, because the implementer
+   verifies each file against it instead of copying another item's diff.
+   When the requirement decides something by a combination of conditions:
+   - list every variable the code uses to decide the SAME thing, from the
+     reads of step 4: a value overwritten by another (e.g. the tercero's
+     regime replaced by the company's), a general parameter AND the record
+     flag it pairs with, an obligation, the vehicle type, the profile. Each
+     one you find is a dimension of the matrix; cite the line that decides it;
+   - write one case per relevant combination, lettered (a), (b)...: the
+     condition in domain words and the expected result. Combinations the
+     requirement does not change say "como hoy" - they are the negative
+     tests that catch regressions;
+   - a combination the document does not settle goes into the same question
+     call as the other doubts (step "Questions"), never resolved by you. A
+     decision that names a parameter says WHICH one (general parameter or
+     record flag) and which cases it covers;
+   - if `IMPACTO.json` or `MAP.json` exist, every RIESGO entry or finding
+     that touches an item ends as a case, a criterion, a `no_tocar` or an
+     open question (rule 12).
+6. **Write the items** per the template and PROMPT_ANALISIS rules 1-6 and 11: one item
    = one location in one file; `objetivo` observable by the user;
    `criterios_aceptacion` verifiable on screen or in the database; `no_tocar`
    and `pruebas_negativas` never empty - name what works today next to the
    change. Order items so that what is called comes before its caller (class
-   method, then the AJAX case, then the JS that posts to it).
+   method, then the AJAX case, then the JS that posts to it). Each item that
+   touches the matrix logic carries `casos: <letras>` and its own criteria
+   for its own file; "el mismo comportamiento del item N" is never a
+   criterion (it is how a second screen ends up with half the change). When
+   two screens share logic, list in each item the conditions, renders and
+   totals of THAT file that must change, with the lines you read. Every item
+   that creates code has its `reutiliza:` line from step 3b, with file:line
+   of what it reuses in THAT file.
 7. **Archivos objetivo**: ALWAYS logical names, NEVER a drive path of this
    machine (the id is also worked on other machines):
    - a file of a registered repo -> `{repo:<nombre>}\<ruta dentro del repo>`,
@@ -292,11 +345,14 @@ questions.
    code "probably" wants. The code tells you WHERE, the document tells you WHAT.
 4. Only ASCII / ISO-8859-1 characters in the spec: no typographic quotes, em
    dashes or ellipsis.
+5. Every dimension of the `Matriz de casos` cites the code line where that
+   condition is decided today; a case nobody can trace to the code is a
+   question, not a case.
 
 # Output
 
 Write the file with the edit tool, then log it:
-`python .opencode/skills/bitacora/bitacora.py add --id <id> --agente analista --accion "ID_SPEC <creado|actualizado|propuesta>" --resultado "tipo <tipo>, <n> items, <n> R trazados, <n> decisiones, <n> preguntas abiertas"`
+`python .opencode/skills/bitacora/bitacora.py add --id <id> --agente analista --accion "ID_SPEC <creado|actualizado|propuesta>" --resultado "tipo <tipo>, <n> items, <n> casos en la matriz, <n> R trazados, <n> decisiones, <n> preguntas abiertas"`
 
 Answer in Spanish, at most fifteen lines: the path written, the route as
 confirmed (tipo, scope of this delivery, files in order), items per file, how

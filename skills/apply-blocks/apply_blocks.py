@@ -43,6 +43,10 @@ LOTE DE UN ID (el lote o el --registro estan en <carpeta_id>/_agentes/)
     lote de un id: un repo no se toca fuera del flujo.
   - Nunca en la rama master/main de un repo (RAMA_BASE): la rama del id la crea
     el desarrollador. Este script lee .git como archivos; NUNCA ejecuta git.
+  - Archivo NUEVO: si el ID_SPEC lo marca "nuevo: si" en Archivos objetivo y no existe,
+    se crea con UN bloque de search_block vacio (todo el contenido en replace_block),
+    en ISO-8859-1 y CRLF; su carpeta debe existir. Con search vacio sobre un archivo
+    que ya existe el bloque no ancla (MULTIPLE) y no se escribe nada.
   - El backup va a <carpeta_id>/_agentes/respaldos/, fuera del repo: dentro del
     repo ensuciaria git status y se podria colar en un commit.
   - El REGISTRO guarda ademas la ruta logica, la rama, la huella de cada item
@@ -60,7 +64,8 @@ CODIGOS DE SALIDA
   0  simulacion limpia, o escritura aplicada y verificada
   1  algun bloque no ancla de forma unica: no se escribio nada
   2  caracteres fuera de latin-1 en un replace: no se escribio nada
-  3  un comentario nuevo cita el andamiaje del flujo (R<n>, item, spec, agente): no se escribio nada
+  3  un comentario nuevo cita el andamiaje del flujo (R<n>, item, spec, agente), o una linea
+     nueva usa alert()/confirm() nativo en vez de SweetAlert: no se escribio nada
   4  error de uso o de lectura
   5  con --apply, algun destino cae en .opencode/protected_paths.txt: no se escribio nada
   6  FUERA_DE_ALCANCE (el archivo no esta en el ID_SPEC, o es de un repo y el lote no es
@@ -206,6 +211,9 @@ RE_ANDAMIAJE = re.compile(r'\bR\d{1,3}\b|\bitems?\b|\bID_SPEC\b|\bTRANSFER_BLOCK
                           r'|\b(implementer|analista|migrator|documenter|avansat_expert)\b', re.I)
 
 
+ALERTA_NATIVA = re.compile(r'(?<![\w.$])(?:window\.)?(?:alert|confirm)\s*\(')
+
+
 def andamiaje_en_comentarios(texto):
     """Lineas de comentario del replace_block que citan el andamiaje del flujo."""
     malas = []
@@ -327,9 +335,11 @@ def main():
             por_archivo.append({'path': destino, 'bloques': [b]})
 
     # Alcance: con un id, solo sus Archivos objetivo; sin id, nunca un repo.
+    nuevos = set()
     if base_id:
         spec = idw.leer_spec(os.path.join(base_id, '_agentes', 'ID_SPEC.md'))
         permitidos = set(idw.clave(idw.absoluta(a['ruta'], base_id)) for a in spec['archivos'])
+        nuevos = set(idw.clave(idw.absoluta(a['ruta'], base_id)) for a in spec['archivos'] if idw.es_nuevo(a))
         for entrada in por_archivo:
             if idw.clave(entrada['path']) not in permitidos:
                 print('FUERA_DE_ALCANCE: %s no esta en Archivos objetivo del ID_SPEC de %s. '
@@ -374,14 +384,29 @@ def main():
         print('')
         print('=' * 74)
         print('DESTINO: %s' % path)
+        entrada['creado'] = False
         if not os.path.isfile(path):
-            print('  *** NO EXISTE ***')
-            fallo = 1
-            continue
+            # Archivo NUEVO del id: solo si el spec lo marca 'nuevo: si', con UN bloque de
+            # search_block vacio (el contenido completo va en el replace). Nunca crea carpetas.
+            if idw.clave(path) not in nuevos:
+                print('  *** NO EXISTE *** (si el id lo crea, marca "nuevo: si" en Archivos objetivo)')
+                fallo = 1
+                continue
+            if len(entrada['bloques']) != 1 or entrada['bloques'][0]['search'].strip():
+                print('  *** NUEVO: el archivo no existe; se crea con UN solo bloque de search_block vacio ***')
+                fallo = 1
+                continue
+            if not os.path.isdir(os.path.dirname(path)):
+                print('  *** NUEVO: la carpeta %s no existe; este script no crea carpetas ***' % os.path.dirname(path))
+                fallo = 1
+                continue
+            entrada['creado'] = True
+            print('  NUEVO: el archivo se crea con este lote (ISO-8859-1, CRLF)')
 
-        raw = leer(path)
+        raw = b'' if entrada['creado'] else leer(path)
         antes = metricas(raw)
-        usa_crlf = antes['crlf'] > antes['lf_sueltos']
+        # Un archivo nuevo sigue el estandar de la casa: CRLF.
+        usa_crlf = True if entrada['creado'] else antes['crlf'] > antes['lf_sueltos']
         txt = raw.decode('latin-1')
         print('  antes: %d bytes, %d lineas, %s, %d tab-inicial, %d con espacios finales'
               % (antes['bytes'], antes['lineas'], 'CRLF' if usa_crlf else 'LF',
@@ -421,6 +446,13 @@ def main():
             if malas:
                 for l in malas:
                     print('  %2d  ESTANDAR  comentario con andamiaje del flujo: %s' % (b['n'], l))
+                fallo = fallo or 3
+            # Mensajes al usuario: siempre SweetAlert (swal / sweetAlertN / Swal.fire), nunca alert()/confirm() nativo.
+            nativas = [l for l in r.split('\n') if l.strip() not in previas and ALERTA_NATIVA.search(l)
+                       and not l.strip().startswith(('//', '*', '/*', '#'))]
+            if nativas:
+                for l in nativas:
+                    print('  %2d  ESTANDAR  alerta nativa, usar SweetAlert: %s' % (b['n'], l.strip()[:120]))
                 fallo = fallo or 3
 
             etiqueta = s.strip().splitlines()[0][:56] if s.strip() else '(vacio)'
@@ -565,6 +597,7 @@ def main():
                 'md5_despues': md5_despues,
                 'backup': os.path.abspath(bak),
                 'verificado': releido == nuevo_raw,
+                'creado': entrada.get('creado', False),
             }
             carpeta = os.path.dirname(os.path.abspath(args.registro))
             if not os.path.isdir(carpeta):

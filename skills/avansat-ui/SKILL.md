@@ -91,9 +91,29 @@ already does.
 - Data from PHP: json_encode with texts passed through utf8_encode (PHP 5.4
   returns false with ISO-8859-1 accents).
 
+## 5b. Messages to the user: always SweetAlert
+
+Every message the id shows (warning, rejection, confirmation, opening notice)
+is a SweetAlert, never a native `alert()` / `confirm()` (developer decision,
+2026-10-05). Use the library the screen ALREADY loads - do not add a second one:
+- Liquidaciones (`sweetalert.min.js`, v1): `swal('Titulo', 'texto', 'warning');`
+  or `swal({ title: '...', text: '...', type: 'warning', confirmButtonText: 'Aceptar' });`
+  Confirmations: `swal({ ..., showCancelButton: true }, function (ok) { if (ok) {...} });`
+- Terceros (`sweetalert2`): the file's helper `sweetAlertN(mensaje, 'warning')`
+  or `Swal.fire({ ... }).then(...)`.
+- A message emitted from PHP is the same call inside the echoed script, e.g.
+  `echo "<script>window.onload = function() { swal({ ... }); }</script>";`
+- Several rejections in one action are joined into ONE SweetAlert (a second
+  call replaces the first on screen).
+- SweetAlert does not block: code after it keeps running. When the flow must
+  wait for the answer (confirm), put that code in the callback / `.then`.
+- If the screen loads no SweetAlert at all, ask before including one.
+- Legacy `alert()` lines that the id does not touch stay as they are.
+
 ## 6. Never
 
 - Raw `<input>`, `<select>`, `<table>` when a Form method exists.
 - Inline `style=` to imitate a class the Form already applies.
 - New CSS files for a single screen, CDNs, or a second copy of a library.
 - Arrow functions, let/const or template literals in JS: match the file.
+- Native `alert()` / `confirm()` in code the id writes or modifies (5b).

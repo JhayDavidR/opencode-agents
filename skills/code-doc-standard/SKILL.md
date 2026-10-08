@@ -36,7 +36,7 @@ traceability tag, not a signature.
 2. **New/modified fragment of 5 executable lines or fewer** inside an existing
    function: ONE line above it, no closing line: `// ID <id>: <what it does>`.
 3. **More than 5 executable lines**: same header, optionally ONE extra context
-   line, closed by exactly `// FIN ID <id>` (nothing else on that line).
+   line, closed by exactly `// ---` (nothing else on that line; never "FIN" or "FIN ID").
    Comments and blank lines do not count as executable.
 4. **Existing line modified**: comment it only if reverting it silently changes
    behaviour a user notices, OR it compensates for something in ANOTHER file,

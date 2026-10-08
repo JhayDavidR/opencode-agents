@@ -197,6 +197,11 @@ def repo_de(ruta):
     return mejor
 
 
+def es_nuevo(archivo):
+    """True si el Archivo objetivo del spec dice 'nuevo: si' (el id lo crea; aun no existe)."""
+    return (archivo.get('nuevo') or '').strip().lower().startswith('si')
+
+
 # Ramas en las que apply_blocks no escribe: el desarrollo va en la rama del id.
 RAMAS_BASE = ('master', 'main')
 
@@ -383,9 +388,10 @@ def leer_spec(ruta):
         elif seccion.startswith('archivos objetivo'):
             m = re.match(r'^\s*-\s*ruta:\s*(.+?)\s*$', linea)
             if m:
-                spec['archivos'].append({'ruta': m.group(1), 'rol': '', 'fuente': ''})
+                spec['archivos'].append({'ruta': m.group(1), 'rol': '', 'fuente': '', 'nuevo': ''})
                 continue
-            m = re.match(r'^\s+(rol|fuente):\s*(.+?)\s*$', linea)
+            # nuevo: si -> el archivo aun no existe; lo crea apply_blocks con un bloque de search vacio.
+            m = re.match(r'^\s+(rol|fuente|nuevo):\s*(.+?)\s*$', linea)
             if m and spec['archivos'] and '<completar' not in m.group(2):
                 spec['archivos'][-1][m.group(1)] = m.group(2)
         elif seccion.startswith('alcance de impacto'):
@@ -588,15 +594,40 @@ def tiene(ctx, nombre):
     return nombre in ctx['artefactos']
 
 
-def ultima_sugerencia_commit(trabajo):
-    """Fecha ISO del ultimo mensaje de commit que dejo /commit ('' si ninguno)."""
+def ultima_sugerencia_commit(trabajo, repo=None):
+    """Fecha ISO del ultimo mensaje de commit que dejo /commit ('' si ninguno).
+    Con repo, solo los mensajes registrados para ese repo."""
     fechas = []
     for linea in (_leer_txt(os.path.join(trabajo, 'COMMITS.jsonl')) or '').splitlines():
         try:
-            fechas.append(json.loads(linea).get('fecha', ''))
+            fila = json.loads(linea)
         except ValueError:
-            pass
+            continue
+        if repo is None or fila.get('repo') == repo:
+            fechas.append(fila.get('fecha', ''))
     return max(fechas or [''])
+
+
+# 'items: 4: SEGURO (...); 5: RIESGO (...)' de cada corrida del ACTA. La hora de la
+# cabecera (22:08) no coincide: el veredicto tiene que seguir a los dos puntos.
+VEREDICTO_ACTA = re.compile(r'(?:^|[\s;,(])(\w+)\s*:\s*(SEGURO|RIESGO|BLOQUEADO|YA_APLICADO)\b')
+
+
+def veredictos_acta(ruta_acta):
+    """{item: (veredicto, cabecera de la corrida)} de la ULTIMA corrida del ACTA que
+    da veredicto a cada item. Vacio si el ACTA no existe o no trae la linea 'items:'."""
+    salida = {}
+    for corrida in re.split(r'(?m)^(?=## Corrida)', _leer_txt(ruta_acta) or ''):
+        if not corrida.startswith('## Corrida'):
+            continue
+        lineas = corrida.splitlines()
+        cabecera = lineas[0][3:].strip()
+        for linea in lineas:
+            m = re.match(r'(?i)^\s*items\s*:(.*)$', linea)
+            if m:
+                for n, veredicto in VEREDICTO_ACTA.findall(' ' + m.group(1)):
+                    salida[n] = (veredicto, cabecera)
+    return salida
 
 
 # ---------------------------------------------------------------- router
@@ -700,6 +731,21 @@ def ruta_del_flujo(ctx):
             if spec.get('id') and spec['id'] not in (g['rama'] or ''):
                 notas.append('la rama %s de %s no menciona el id %s: confirma que es la rama del id'
                              % (g['rama'], nombre_repo, spec['id']))
+            # El commit avanzo desde la ultima escritura del id y /commit no dejo constancia:
+            # lo mas probable es que el desarrollador commiteo a mano, y el proximo /commit
+            # volveria a proponer esos archivos.
+            escritas = sorted((f for f in ctx['registro'] if es_escritura(f) and f.get('repo') == nombre_repo),
+                              key=lambda f: f.get('fecha', ''))
+            if escritas and g['commit'] and escritas[-1].get('commit_base'):
+                base_ultima = escritas[-1]['commit_base']
+                corto = min(len(base_ultima), len(g['commit']))
+                if (base_ultima[:corto] != g['commit'][:corto]
+                        and ultima_sugerencia_commit(ctx['trabajo'], nombre_repo) < escritas[-1].get('fecha', '')):
+                    notas.append('el commit de %s cambio desde la ultima escritura del id (%s -> %s) y /commit no '
+                                 'registro mensaje: si ya commiteaste esos archivos, registralo para que el proximo '
+                                 '/commit no los repita: python .opencode/skills/commit-msg/commit_msg.py %s '
+                                 '--registrar %s --tipo <feat|fix>'
+                                 % (nombre_repo, base_ultima, g['commit'], c, nombre_repo))
 
     for a in objetivos:
         a['nombre'] = etiqueta(a['abs'], spec, ctx['base'])
@@ -728,7 +774,14 @@ def ruta_del_flujo(ctx):
                              'contra el spec vigente (aplica solo lo que falte; si todo esta, lo deja en el ACTA)'
                              % (a['nombre'], a['nombre']))
         if not a['aplicado'] and not os.path.isfile(a['abs']):
-            if repo_de(a['abs']):
+            if es_nuevo(a):
+                # Archivo que el id crea: no es un faltante. Solo su carpeta debe existir.
+                if not os.path.isdir(os.path.dirname(a['abs'])):
+                    notas.append('la carpeta de %s no existe: %s' % (a['nombre'], os.path.dirname(a['abs'])))
+                    if not bloqueo:
+                        bloqueo = 'crea la carpeta %s (el archivo nuevo %s va ahi)' % (
+                            os.path.dirname(a['abs']), a['nombre'])
+            elif repo_de(a['abs']):
                 notas.append('FALTA %s en el repo: revisa la ruta del ID_SPEC o que estes en la rama correcta'
                              % a['abs'])
                 if not bloqueo:
@@ -831,21 +884,49 @@ def ruta_del_flujo(ctx):
     else:
         pasos.append(('[-]', '/impacto %s   (opcional: si toca algo que otros archivos leen)' % c))
         opcionales.append('/impacto %s' % c)
+    orden_item = lambda n: (len(n), n)
     for a in objetivos:
         items = items_de(spec, a['nombre'])
         cert = 'CERTIFICADO_%s.md' % a['nombre']
+        escrituras = [f for f in ctx['aplicados'].get(clave(a['abs']), []) if es_escritura(f)]
         if a['aplicado']:
-            pasos.append(('[x]', 'implementado %s (items %s)' % (a['nombre'], ','.join(items) or '-')))
+            if items:
+                pasos.append(('[x]', 'implementado %s (items %s)' % (a['nombre'], ','.join(items))))
+            else:
+                registrados = sorted(set(str(i) for f in escrituras for i in f.get('items', [])), key=orden_item)
+                pasos.append(('[x]', 'implementado %s (sin item propio en el ID_SPEC%s)'
+                              % (a['nombre'], ('; REGISTRO: items ' + ','.join(registrados)) if registrados else '')))
         else:
             cmd = cmd_implementar(a)
             pasos.append(('[ ]', '%s   (items %s)' % (cmd, ','.join(a['delta'] or items) or 'NINGUNO')))
             if not items:
                 notas.append('%s no tiene items en el ID_SPEC: sobra en Archivos objetivo o falta su item' % a['nombre'])
             siguiente = siguiente or (bloqueo or cmd + '   (sesion nueva: /new)')
-        if tiene(ctx, cert):
-            texto = open(os.path.join(ctx['trabajo'], cert), 'r', encoding='utf-8', errors='replace').read()
-            if re.search(r'\b(RIESGO|BLOQUEADO)\b', texto):
-                notas.append('%s menciona RIESGO/BLOQUEADO: esos items esperan tu decision antes de reintentar' % cert)
+        if not items and escrituras:
+            # Un item que reparte su logica entre dos archivos deja a uno sin item: el
+            # router nunca lo vuelve a pedir y un /cambio de esa logica no llega a el.
+            notas.append('%s tiene escrituras en REGISTRO.jsonl pero ningun item propio en el ID_SPEC: un ajuste '
+                         'futuro a esa logica no se enrutara a este archivo. Dale su item (/cambio %s ...) y, si el '
+                         'codigo ya esta, marcalo: python .opencode/skills/id-workspace/id_workspace.py verificado '
+                         '%s %s --items <N>' % (a['nombre'], c, c, a['nombre']))
+        # RIESGO/BLOQUEADO solo cuenta para items que siguen pendientes, y por el veredicto
+        # de su ultima corrida en el ACTA: el certificado cita RIESGO tambien para decir
+        # que un riesgo del IMPACTO quedo resuelto.
+        pendientes = a['delta'] or ([] if a['aplicado'] else items)
+        if pendientes:
+            veredictos = veredictos_acta(os.path.join(ctx['trabajo'], 'ACTA_%s.md' % a['nombre']))
+            en_espera = [n for n in pendientes if veredictos.get(n, ('',))[0] in ('RIESGO', 'BLOQUEADO')]
+            if en_espera:
+                notas.append('ACTA_%s.md: %s en la corrida "%s": esperan tu decision antes de reintentar '
+                             '(su linea pendiente: dice que lo desbloquea)'
+                             % (a['nombre'], ', '.join('item %s %s' % (n, veredictos[n][0]) for n in en_espera),
+                                veredictos[en_espera[-1]][1]))
+            elif not veredictos and tiene(ctx, cert):
+                # ACTA de una corrida anterior al formato 'items: N: VEREDICTO'.
+                texto = _leer_txt(os.path.join(ctx['trabajo'], cert)) or ''
+                if re.search(r'\b(RIESGO|BLOQUEADO)\b', texto):
+                    notas.append('%s menciona RIESGO/BLOQUEADO y su ACTA no trae veredictos por item: revisa '
+                                 'si los items pendientes esperan tu decision' % cert)
     if siguiente and opcionales and not bloqueo:
         siguiente += '\n           antes, si aplica: ' + '  |  '.join(opcionales)
     return pasos, siguiente or paso_prueba_y_manual(), notas
@@ -987,7 +1068,13 @@ def cmd_estado(base):
                     print('  [SIN RESOLVER] %s   %s' % (a['ruta'], error))
                     continue
                 if h is None:
-                    print('  [FALTA] %s' % ruta)
+                    if es_nuevo(a):
+                        print('  [NUEVO] %s   (lo crea /implementar: un bloque con search_block vacio)' % ruta)
+                        items = items_de(spec, etiqueta(ruta, spec, base))
+                        print('      en el spec: %s | rol %s | items: %s'
+                              % (a['ruta'], a['rol'] or '-', ', '.join(items) or 'ninguno'))
+                    else:
+                        print('  [FALTA] %s' % ruta)
                     continue
                 aplicado = ctx['aplicados'].get(clave(ruta), [])
                 r = repo_de(ruta)
@@ -1214,6 +1301,36 @@ def parse_items(texto):
     return [n.strip() for n in re.split(r'[,\s]+', texto or '') if n.strip()]
 
 
+def es_simbolo(palabra):
+    """Si una palabra de 'simbolos:' es un nombre del codigo y no prosa del item
+    ('hoy', 'cambia', 'servicios'): lleva guion bajo, mayuscula interior (camelCase),
+    es un $variable o es una etiqueta en mayusculas (RETENCIONFUENTEMANIFIESTO)."""
+    if palabra.startswith('$_') or palabra == '$this':
+        return False
+    return ('_' in palabra or palabra.startswith('$') or re.search(r'[a-z][A-Z]', palabra) is not None
+            or (palabra.isupper() and len(palabra) >= 6))
+
+
+def veredictos_impacto(datos, simbolos):
+    """Lineas 'VEREDICTO simbolo: razon' de los targets del IMPACTO que tocan los
+    simbolos, RIESGO y BLOQUEADO primero. Las entradas pequenas que imprime
+    _entradas_con no traen el veredicto: esta es la parte que decide."""
+    lineas = []
+    for t in (datos or {}).get('targets', []) if isinstance(datos, dict) else []:
+        if not isinstance(t, dict):
+            continue
+        # Solo por el nombre del target: casi todos los textos citan los simbolos comunes.
+        nombre_t = str(t.get('symbol') or '')
+        if not any(re.search(r'(?<![A-Za-z0-9_])%s(?![A-Za-z0-9_])' % re.escape(s), nombre_t) for s in simbolos):
+            continue
+        veredicto = t.get('verdict') or '-'
+        razon = ' '.join(str(t.get('verdict_reason') or '').split())
+        lineas.append((0 if veredicto in ('RIESGO', 'BLOQUEADO') else 1,
+                       '%s %s: %s' % (veredicto, t.get('symbol') or '?',
+                                      razon if len(razon) <= 600 else razon[:600] + ' ...')))
+    return [l for _, l in sorted(lineas, key=lambda x: x[0])]
+
+
 def cmd_contexto(base, archivo, numeros):
     """Lo que necesita una correccion puntual y nada mas. Reemplaza leer 'estado', el
     ID_SPEC entero, el ACTA entero y el IMPACTO entero en una corrida con 'items N'."""
@@ -1267,9 +1384,10 @@ def cmd_contexto(base, archivo, numeros):
             m = re.match(r'^\s*simbolos:\s*(.*)$', linea)
             if m:
                 # $_REQUEST, $_POST... aparecen en todo el IMPACTO: la clave entre corchetes si sirve.
-                simbolos.update(w for w in re.findall(r'[A-Za-z_$][A-Za-z0-9_]{3,}', m.group(1))
-                                if not w.startswith('$_'))
-    for titulo in ('reglas globales', 'cambios ajenos al id'):
+                # Sin el '$': los JSON escriben la variable con y sin el.
+                simbolos.update(w.lstrip('$') for w in re.findall(r'[A-Za-z_$][A-Za-z0-9_]{3,}', m.group(1))
+                                if es_simbolo(w))
+    for titulo in ('reglas globales', 'matriz de casos', 'cambios ajenos al id'):
         clave_sec = next((k for k in secs if k.startswith(titulo)), None)
         if clave_sec and secs[clave_sec]:
             print('')
@@ -1316,6 +1434,13 @@ def cmd_contexto(base, archivo, numeros):
                 datos = json.loads(_leer_txt(p) or 'null')
             except ValueError:
                 continue
+            if nombre_json == 'IMPACTO.json':
+                veredictos = veredictos_impacto(datos, sorted(simbolos))
+                if veredictos:
+                    print('')
+                    print('IMPACTO.json - veredicto de los simbolos de estos items (RIESGO/BLOQUEADO primero):')
+                    for v in veredictos:
+                        print('  ' + v)
             salida = []
             _entradas_con(datos, sorted(simbolos), salida)
             if salida:
