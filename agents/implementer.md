@@ -472,10 +472,15 @@ Never leave a file half-applied.
 6. Preserve dead code and commented-out code.
 7. Messages to the user are ALWAYS SweetAlert (skill `avansat-ui` 5b), with the
    library the screen already loads: `swal(...)` in liquidaciones, `sweetAlertN`
-   / `Swal.fire` in terceros, also when the message is echoed from PHP. A new or
-   modified line with a native `alert(` or `confirm(` is a defect: apply_blocks
-   rejects it (ESTANDAR, exit 3). Legacy alert lines the item does not touch
-   stay as they are.
+   / `Swal.fire` in terceros. A new or modified line with a native `alert(` or
+   `confirm(` is a defect: apply_blocks rejects it (ESTANDAR, exit 3). Legacy
+   alert lines the item does not touch stay as they are.
+8. No JavaScript inline in PHP: a new `<script>` echoed or concatenated in a
+   .php (`echo "<script>..."`, `window.onload` from PHP) is a defect that
+   apply_blocks rejects (ESTANDAR, exit 3). PHP paints a hidden flag with the
+   section's hidden pattern; the screen's .js reads it in `$(document).ready`
+   and does the work in a named function (skill `avansat-ui` 5b). If the
+   screen's .js is not a target of the spec, ask before writing anything.
 
 # PHP 5.4 Constraints
 

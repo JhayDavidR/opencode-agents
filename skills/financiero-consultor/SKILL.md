@@ -28,6 +28,24 @@ before citing a line, read it with `read-file`.
   (`../consultor/lib/general/functions.inc`, cwd = client folder) and from an AJAX file
   (`../../lib/general/functions.inc`, cwd = module folder). A class shared by both checks
   `file_exists` and uses `include_once`.
+- Do NOT load Bootstrap (nor any global CSS) in a module screen. consultor includes the screen INSIDE
+  its own page (`seguridad/index.php:174-178`: prints the "Esta en" bar, `include`s `rut_archiv`, prints
+  the bar again), so any global stylesheet also restyles the framework bars and the rest of Avansat.
+  Seen in id 587624: `bootstrap.min.css` (body margin 0, box-sizing, negative `.row` margins) hid the top
+  bar, misaligned the bottom bar and added a horizontal scroll. Some old screens load Bootstrap
+  (`inf_ventas.php`, medmag): do not copy that.
+- When the requirement brings approved mockups (cards, columns, orange Avansat buttons), the module gets
+  ONE shared stylesheet in `css/` (ASCII, CRLF) loaded by all its screens after `styles.css`,
+  `dinamic_list.css` and `sweetalert.css`. The visible markup goes inside `div.fop-app` (or the module's
+  own prefix) and EVERY rule starts with that container selector; no rule on html, body, *, table, input,
+  select, label, a or classes of styles.css/dinamic_list.css. Grid with flex + gap (never negative margins).
+  Detail windows with SweetAlert2. DinamicHtml keeps the skeleton (SetCss, SetJs, Body, Form, Hidden,
+  CloseForm, Popup, MakeHtml) and the markup goes in with `SetBody` BEFORE `Hidden`/`CloseForm` so it stays
+  inside the form (CloseForm adds the hidden `window` and `cod_servic`). Keep field `name`/`id` as
+  DinamicHtml would generate them (`<name>ID`): the JS reads them. Accents in the markup: HTML entities or
+  ISO-8859-1, never UTF-8. Prototype HTML saved as a browser "view-source" page can be turned into real HTML
+  keeping the line numbers (one `td.line-content` per line) so the agents can read its CSS.
+  Example: id 587624 (`css/est_concil_fopatx.css`, regla "Estilo visual" of its ID_SPEC).
 - Messages to the user: SweetAlert2 (`js/sweetalert/v11.15.10/sweetalert2.js`, `Swal.fire`).
   Never `alert()` or `confirm()`.
 - New file names follow the module: `ins_` insert/process screen, `anu_` annul, `inf_`

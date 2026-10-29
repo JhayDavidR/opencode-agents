@@ -65,7 +65,7 @@ CODIGOS DE SALIDA
   1  algun bloque no ancla de forma unica: no se escribio nada
   2  caracteres fuera de latin-1 en un replace: no se escribio nada
   3  un comentario nuevo cita el andamiaje del flujo (R<n>, item, spec, agente), o una linea
-     nueva usa alert()/confirm() nativo en vez de SweetAlert: no se escribio nada
+     nueva usa alert()/confirm() nativo en vez de SweetAlert, o un PHP agrega <script> inline: no se escribio nada
   4  error de uso o de lectura
   5  con --apply, algun destino cae en .opencode/protected_paths.txt: no se escribio nada
   6  FUERA_DE_ALCANCE (el archivo no esta en el ID_SPEC, o es de un repo y el lote no es
@@ -211,6 +211,7 @@ RE_ANDAMIAJE = re.compile(r'\bR\d{1,3}\b|\bitems?\b|\bID_SPEC\b|\bTRANSFER_BLOCK
                           r'|\b(implementer|analista|migrator|documenter|avansat_expert)\b', re.I)
 
 
+SCRIPT_INLINE = re.compile(r'<script(?![^>]*\bsrc\s*=)', re.I)
 ALERTA_NATIVA = re.compile(r'(?<![\w.$])(?:window\.)?(?:alert|confirm)\s*\(')
 
 
@@ -454,6 +455,13 @@ def main():
                 for l in nativas:
                     print('  %2d  ESTANDAR  alerta nativa, usar SweetAlert: %s' % (b['n'], l.strip()[:120]))
                 fallo = fallo or 3
+            # Nada de JS inline en PHP: el PHP pinta un hidden y el .js de la pantalla hace el trabajo.
+            if entrada['path'].lower().endswith(('.php', '.inc')):
+                inline = [l for l in r.split('\n') if l.strip() not in previas and SCRIPT_INLINE.search(l)]
+                if inline:
+                    for l in inline:
+                        print('  %2d  ESTANDAR  JS inline en PHP, usar hidden + .js: %s' % (b['n'], l.strip()[:120]))
+                    fallo = fallo or 3
 
             etiqueta = s.strip().splitlines()[0][:56] if s.strip() else '(vacio)'
             if n == 1:

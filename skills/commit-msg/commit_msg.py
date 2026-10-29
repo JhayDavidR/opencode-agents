@@ -92,6 +92,40 @@ def sugerencias(trabajo):
     return salida
 
 
+def ultimo_commit_rama(carpeta):
+    """Fecha local (isoformat) del ultimo commit hecho en la rama actual del repo, leida del
+    reflog (.git/logs/refs/heads/<rama>) como archivo; '' si no hay. Existe porque el
+    desarrollador tambien hace commits sin pasar por /commit: lo escrito antes de ese commit
+    ya esta commiteado y no debe volver a proponerse."""
+    git = idw.info_git(carpeta) if carpeta else None
+    if not git or not git.get('rama'):
+        return ''
+    ruta = os.path.join(carpeta, '.git', 'logs', 'refs', 'heads', *git['rama'].split('/'))
+    ultimo = ''
+    for linea in (idw._leer_txt(ruta) or '').splitlines():
+        cabeza, _, mensaje = linea.partition('\t')
+        if not mensaje.startswith('commit'):
+            continue
+        partes = cabeza.split()
+        try:
+            epoca = int(partes[-2])
+        except (IndexError, ValueError):
+            continue
+        ultimo = max(ultimo, datetime.datetime.fromtimestamp(epoca).isoformat(timespec='seconds'))
+    return ultimo
+
+
+def ya_commiteada(base, fila, cache):
+    """True si la escritura es anterior al ultimo commit de la rama de su repo."""
+    ruta = idw.absoluta(fila.get('archivo_ref') or fila.get('archivo', ''), base)
+    repo = idw.repo_de(ruta)
+    if not repo:
+        return False
+    if repo[0] not in cache:
+        cache[repo[0]] = ultimo_commit_rama(repo[1])
+    return bool(cache[repo[0]]) and fila.get('fecha', '') <= cache[repo[0]]
+
+
 def agrupar(base, filas):
     """{grupo: {'carpeta', 'archivos': {relativa: datos}}}. grupo = repo o 'copias'."""
     grupos = {}
@@ -148,6 +182,13 @@ def main():
     todo = '--todo' in args
     desde = '' if todo or not previas else max(p.get('fecha', '') for p in previas)
     escrituras = [f for f in ctx['registro'] if idw.es_escritura(f) and f.get('fecha', '') > desde]
+    cache = {}
+    if not todo:
+        # lo escrito antes del ultimo commit real de la rama ya esta commiteado
+        escrituras = [f for f in escrituras if not ya_commiteada(base, f, cache)]
+        commits = ['%s %s' % (r, c) for r, c in sorted(cache.items()) if c]
+        if commits:
+            print('Ultimo commit en la rama (reflog): %s' % ', '.join(commits))
     archivos_id = [os.path.basename(idw.absoluta(a['ruta'], base).replace('\\', '/')) for a in spec['archivos']]
 
     print('COMMIT DEL ID %s  (carpeta %s)  "%s"  tipo de id: %s'

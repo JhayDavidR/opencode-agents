@@ -68,7 +68,10 @@ notes ("correccion del orden de los PAQ", "solo manifi2.js").
    only if the prompt asks for the whole id. It prints, per repository, the
    files written (paths relative to the repo, ready for the add), the items,
    the +/- lines, the bitacora rows since the last message and the last
-   decisions. Those are your ONLY facts. Do not open code, the ACTA or the
+   decisions. It leaves out what was written before the branch's last real
+   commit (read from the reflog, line `Ultimo commit en la rama`), so commits
+   the developer made without /commit are not proposed again. Those are your
+   ONLY facts. Do not open code, the ACTA or the
    spec. `SIN_CAMBIOS` means there is nothing to commit: say so and stop.
 2. Type: the prompt's if it gives one; otherwise the script's `Tipo sugerido`.
    `feat` = functionality the id adds; `fix` = a correction of something

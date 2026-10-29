@@ -101,8 +101,13 @@ is a SweetAlert, never a native `alert()` / `confirm()` (developer decision,
   Confirmations: `swal({ ..., showCancelButton: true }, function (ok) { if (ok) {...} });`
 - Terceros (`sweetalert2`): the file's helper `sweetAlertN(mensaje, 'warning')`
   or `Swal.fire({ ... }).then(...)`.
-- A message emitted from PHP is the same call inside the echoed script, e.g.
-  `echo "<script>window.onload = function() { swal({ ... }); }</script>";`
+- NEVER JavaScript inline in PHP (`echo "<script>..."`, `$html .= '<script>...'`,
+  `window.onload` from PHP). When PHP decides that a message must show on load,
+  it paints a hidden flag with the section's own hidden pattern (e.g.
+  `<input type="hidden" name="ind_rstposee" id="ind_rstposeeID" value="1" />`)
+  and the screen's .js file (the one PHP already includes with IncludeJS) shows
+  it from `$(document).ready` with a named function. The text lives once, in
+  the .js. Including a library with `IncludeJS`/`IncludeCss` is fine.
 - Several rejections in one action are joined into ONE SweetAlert (a second
   call replaces the first on screen).
 - SweetAlert does not block: code after it keeps running. When the flow must
@@ -117,3 +122,4 @@ is a SweetAlert, never a native `alert()` / `confirm()` (developer decision,
 - New CSS files for a single screen, CDNs, or a second copy of a library.
 - Arrow functions, let/const or template literals in JS: match the file.
 - Native `alert()` / `confirm()` in code the id writes or modifies (5b).
+- JavaScript inline in PHP (`<script>` echoed or concatenated): flag in a hidden, logic in the .js (5b).
