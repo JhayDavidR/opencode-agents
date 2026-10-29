@@ -4,7 +4,7 @@ description: >
   file, and the SQL statements, from the facts printed by resumen_cambios.py.
   Writes nothing; answers in the chat. Responds in Spanish.
 mode: primary
-model: zai-coding-plan/glm-5-turbo
+model: zai-coding-plan/glm-5.3-flash
 steps: 6
 permission:
   read:

@@ -6,7 +6,7 @@ description: >
   runs git: it writes two text files and gives the developer the exact
   commands to run. Responds in Spanish.
 mode: primary
-model: zai-coding-plan/glm-5-turbo
+model: zai-coding-plan/glm-5.3-flash
 steps: 12
 permission:
   read:

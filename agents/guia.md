@@ -5,7 +5,7 @@ description: >
   questions about the workflow from FLUJO.md. Never analyzes code, never writes
   files, never runs another agent. Responds in Spanish.
 mode: primary
-model: zai-coding-plan/glm-5-turbo
+model: zai-coding-plan/glm-5.3-flash
 steps: 4
 permission:
   read:

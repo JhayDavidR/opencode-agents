@@ -28,3 +28,5 @@ export const SinGit = async () => {
     },
   }
 }
+
+export default { id: "sin-git", setup: SinGit }

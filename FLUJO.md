@@ -288,13 +288,13 @@ ajustar con la evidencia de cada piloto.
 | implementer | codigo nuevo con riesgo: SQL dentro de transacciones, logica que se cruza con otra funcionalidad (ej. el Prevalidador en class_manifi), codigo central de todos los clientes (ws_rndc), porte | zai-coding-plan/glm-5.3 | byteplus/deepseek-v4-pro | max |
 | implementer | codigo nuevo local y con patron en el mismo archivo: un check o campo en pantalla, mostrar/ocultar por AJAX, una columna condicional en un INSERT/UPDATE, un dato informativo (validado en 562380: ajax.php de vehicu) | zai-coding-plan/glm-5.3-flash | byteplus/deepseek-v4-flash | high |
 | implementer | delta con `items N` (1-2 bloques, criterios concretos) o verificacion YA_APLICADO | zai-coding-plan/glm-5.3-flash | byteplus/deepseek-v4-flash | high |
-| migrator | migracion mismo archivo | zai-coding-plan/glm-5.3-highspeed | byteplus/deepseek-v4-flash | normal |
+| migrator | migracion mismo archivo | zai-coding-plan/glm-5.3-flash | byteplus/deepseek-v4-flash | normal |
 | documenter | manual detallado | zai-coding-plan/glm-5.3 | byteplus/kimi-k2.5 | normal |
 | comparator_agent | diff / depuracion | zai-coding-plan/glm-5.3-flash | byteplus/deepseek-v4-flash | normal |
-| time_report | reporte del dia | zai-coding-plan/glm-5-turbo | zai-coding-plan/glm-4.7 | bajo |
-| guia | relevo del router | zai-coding-plan/glm-5-turbo (fijo en el agente) | - | bajo |
-| commits | mensaje de commit y pull request | zai-coding-plan/glm-5-turbo (fijo en el agente) | - | bajo |
-| resumen | resumen final por archivo | zai-coding-plan/glm-5-turbo (fijo en el agente) | - | bajo |
+| time_report | reporte del dia | zai-coding-plan/glm-5.3-flash | byteplus/deepseek-v4-flash | bajo |
+| guia | relevo del router | zai-coding-plan/glm-5.3-flash (fijo en el agente) | - | bajo |
+| commits | mensaje de commit y pull request | zai-coding-plan/glm-5.3-flash (fijo en el agente) | - | bajo |
+| resumen | resumen final por archivo | zai-coding-plan/glm-5.3-flash (fijo en el agente) | - | bajo |
 
 Evitar modelos flash/turbo en el analisis completo (`/spec`), en la primera implementacion de
 un archivo y en el documenter: producen lo que llega a produccion o razonan escenarios de
